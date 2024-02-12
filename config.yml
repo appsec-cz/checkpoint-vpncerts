@@ -1,0 +1,5 @@
+certDir: "certs"
+certTemplate:
+  validity: 365
+  organization: "My Company"
+  country: "CZ"
