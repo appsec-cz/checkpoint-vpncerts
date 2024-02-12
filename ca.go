@@ -1,8 +1,9 @@
 package main
 
 import (
+	"crypto/ecdsa"
+	"crypto/elliptic"
 	"crypto/rand"
-	"crypto/rsa"
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/pem"
@@ -13,12 +14,12 @@ import (
 	"time"
 )
 
-func getCA(name string) (cert *x509.Certificate, key *rsa.PrivateKey, err error) {
-	if _, err := os.Stat(path.Join(config.CertDir, name+"-CA.crt")); err == nil {
+func getCA(name string) (cert *x509.Certificate, key *ecdsa.PrivateKey, err error) {
+	if _, err := os.Stat(path.Join(config.CertDir, name+" CA.crt")); err == nil {
 
 		// Load CA certificate
 		log.Println("Loading CA certificate -", name)
-		certFile, err := os.ReadFile(path.Join(config.CertDir, name+"-CA.crt"))
+		certFile, err := os.ReadFile(path.Join(config.CertDir, name+" CA.crt"))
 		if err != nil {
 			return nil, nil, err
 		}
@@ -31,12 +32,13 @@ func getCA(name string) (cert *x509.Certificate, key *rsa.PrivateKey, err error)
 
 		// Load CA key
 		log.Println("Loading CA key -", name)
-		keyFile, err := os.ReadFile(path.Join(config.CertDir, name+"-CA.key"))
+		keyFile, err := os.ReadFile(path.Join(config.CertDir, name+" CA.key"))
 		if err != nil {
 			return nil, nil, err
 		}
 		block, _ = pem.Decode(keyFile)
-		key, err = x509.ParsePKCS1PrivateKey(block.Bytes)
+		key, err = x509.ParseECPrivateKey(block.Bytes)
+		//		key, err = x509.ParsePKCS1PrivateKey(block.Bytes)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -46,19 +48,22 @@ func getCA(name string) (cert *x509.Certificate, key *rsa.PrivateKey, err error)
 	}
 
 	log.Println("Creating CA certificate -", name)
-	key, err = rsa.GenerateKey(rand.Reader, 4096)
+	key, err = ecdsa.GenerateKey(elliptic.P521(), rand.Reader)
+	//key, err = rsa.GenerateKey(rand.Reader, 4096)
 	if err != nil {
 		return nil, nil, err
 	}
+	now := time.Now()
 	templateCA := x509.Certificate{
 		SerialNumber: big.NewInt(1),
 		Subject: pkix.Name{
 			CommonName:   name,
 			Organization: []string{config.CertTemplate.Organization},
 			Country:      []string{config.CertTemplate.Country},
+			Locality:     []string{config.CertTemplate.Locality},
 		},
-		NotBefore:             time.Now(),
-		NotAfter:              time.Now().Add(20 * 365 * 24 * 10 * time.Hour),
+		NotBefore:             now,
+		NotAfter:              now.AddDate(10, 0, 0),
 		KeyUsage:              x509.KeyUsageCertSign | x509.KeyUsageCRLSign,
 		BasicConstraintsValid: true,
 		IsCA:                  true,
@@ -73,36 +78,27 @@ func getCA(name string) (cert *x509.Certificate, key *rsa.PrivateKey, err error)
 	}
 	log.Println("CA certificate created -", name)
 
-	err = saveCA(name, cert, key)
+	// Save CA certificate and key
+	certOut, err := os.Create(path.Join(config.CertDir, name+" CA.crt"))
 	if err != nil {
 		return nil, nil, err
-	}
-
-	return cert, key, nil
-}
-
-func saveCA(name string, cert *x509.Certificate, key *rsa.PrivateKey) error {
-	certOut, err := os.Create(path.Join(config.CertDir, name+"-CA.crt"))
-	if err != nil {
-		return err
 	}
 	defer certOut.Close()
 	err = pem.Encode(certOut, &pem.Block{Type: "CERTIFICATE", Bytes: cert.Raw})
 	if err != nil {
-		return err
+		return nil, nil, err
 	}
-
-	keyOut, err := os.Create(path.Join(config.CertDir, name+"-CA.key"))
+	keyOut, err := os.Create(path.Join(config.CertDir, name+" CA.key"))
 	if err != nil {
-		return err
+		return nil, nil, err
 	}
 	defer keyOut.Close()
-	err = pem.Encode(keyOut, &pem.Block{Type: "RSA PRIVATE KEY", Bytes: x509.MarshalPKCS1PrivateKey(key)})
+	b, _ := x509.MarshalECPrivateKey(key)
+	err = pem.Encode(keyOut, &pem.Block{Type: "EC PRIVATE KEY", Bytes: b})
 	if err != nil {
-		return err
+		return nil, nil, err
 	}
-
 	log.Println("CA saved -", name)
 
-	return nil
+	return cert, key, nil
 }

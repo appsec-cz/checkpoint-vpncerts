@@ -3,3 +3,4 @@ certTemplate:
   validity: 730
   organization: "My Company"
   country: "CZ"
+  locality: "Prague"

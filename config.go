@@ -6,5 +6,6 @@ var config struct {
 		ValidityDays int    `yaml:"validity"`
 		Organization string `yaml:"organization"`
 		Country      string `yaml:"country"`
+		Locality     string `yaml:"locality"`
 	} `yaml:"certTemplate"`
 }

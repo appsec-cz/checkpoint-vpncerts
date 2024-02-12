@@ -1,6 +1,7 @@
 package main
 
 import (
+	"crypto/ecdsa"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/x509"
@@ -10,13 +11,12 @@ import (
 	"math/big"
 	"os"
 	"path"
-	"strings"
 	"time"
 
 	"software.sslmate.com/src/go-pkcs12"
 )
 
-func createCertificate(name, password string, caCert *x509.Certificate, caKey *rsa.PrivateKey) (err error) {
+func createCertificate(name, password string, caCert *x509.Certificate, caKey *ecdsa.PrivateKey) (err error) {
 
 	var key *rsa.PrivateKey
 
@@ -38,7 +38,7 @@ func createCertificate(name, password string, caCert *x509.Certificate, caKey *r
 	} else {
 		// Create client private key
 		log.Println("Creating client private key -", name)
-		key, err = rsa.GenerateKey(rand.Reader, 2048)
+		key, err = rsa.GenerateKey(rand.Reader, 3192)
 		if err != nil {
 			return err
 		}
@@ -47,17 +47,18 @@ func createCertificate(name, password string, caCert *x509.Certificate, caKey *r
 
 	// Create client certificate
 	log.Println("Creating client certificate -", name)
+	now := time.Now()
 	template := x509.Certificate{
 		SerialNumber: big.NewInt(2),
 		Subject: pkix.Name{
 			CommonName:   name,
-			SerialNumber: strings.ReplaceAll(name, " ", "_"),
+			SerialNumber: name + " " + now.Format("2006-01-02"),
 			Organization: []string{config.CertTemplate.Organization},
 			Country:      []string{config.CertTemplate.Country},
-			Locality:     []string{"Prague"},
+			Locality:     []string{config.CertTemplate.Locality},
 		},
-		NotBefore:   time.Now(),
-		NotAfter:    time.Now().Add(2 * 365 * 24 * time.Hour),
+		NotBefore:   now,
+		NotAfter:    now.AddDate(0, 0, config.CertTemplate.ValidityDays),
 		KeyUsage:    x509.KeyUsage(x509.KeyUsageDigitalSignature),
 		ExtKeyUsage: []x509.ExtKeyUsage{x509.ExtKeyUsageIPSECUser, x509.ExtKeyUsageClientAuth},
 		Extensions:  []pkix.Extension{},
@@ -72,20 +73,12 @@ func createCertificate(name, password string, caCert *x509.Certificate, caKey *r
 	}
 	log.Println("Client certificate created -", name)
 
-	err = saveCertificate(name, password, cert, key)
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func saveCertificate(name, password string, cert *x509.Certificate, key *rsa.PrivateKey) error {
+	// Save client certificate
 	pfx, err := pkcs12.Modern.Encode(key, cert, nil, password)
 	if err != nil {
 		return err
 	}
-	err = os.WriteFile(path.Join(config.CertDir, cert.Subject.CommonName+".p12"), pfx, 0644)
+	err = os.WriteFile(path.Join(config.CertDir, cert.Subject.CommonName+" "+now.Format("2006-01-02")+".p12"), pfx, 0600)
 	if err != nil {
 		return err
 	}
