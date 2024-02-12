@@ -15,11 +15,14 @@ import (
 )
 
 func getCA(name string) (cert *x509.Certificate, key *ecdsa.PrivateKey, err error) {
-	if _, err := os.Stat(path.Join(config.CertDir, name+" CA.crt")); err == nil {
+	dir := path.Join(config.CertDir, name)
+	now := time.Now()
+
+	if _, err := os.Stat(path.Join(dir, name+" CA.crt")); err == nil {
 
 		// Load CA certificate
 		log.Println("Loading CA certificate -", name)
-		certFile, err := os.ReadFile(path.Join(config.CertDir, name+" CA.crt"))
+		certFile, err := os.ReadFile(path.Join(dir, name+" CA.crt"))
 		if err != nil {
 			return nil, nil, err
 		}
@@ -32,13 +35,12 @@ func getCA(name string) (cert *x509.Certificate, key *ecdsa.PrivateKey, err erro
 
 		// Load CA key
 		log.Println("Loading CA key -", name)
-		keyFile, err := os.ReadFile(path.Join(config.CertDir, name+" CA.key"))
+		keyFile, err := os.ReadFile(path.Join(dir, name+" CA.key"))
 		if err != nil {
 			return nil, nil, err
 		}
 		block, _ = pem.Decode(keyFile)
 		key, err = x509.ParseECPrivateKey(block.Bytes)
-		//		key, err = x509.ParsePKCS1PrivateKey(block.Bytes)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -49,11 +51,9 @@ func getCA(name string) (cert *x509.Certificate, key *ecdsa.PrivateKey, err erro
 
 	log.Println("Creating CA certificate -", name)
 	key, err = ecdsa.GenerateKey(elliptic.P521(), rand.Reader)
-	//key, err = rsa.GenerateKey(rand.Reader, 4096)
 	if err != nil {
 		return nil, nil, err
 	}
-	now := time.Now()
 	templateCA := x509.Certificate{
 		SerialNumber: big.NewInt(1),
 		Subject: pkix.Name{
@@ -79,7 +79,14 @@ func getCA(name string) (cert *x509.Certificate, key *ecdsa.PrivateKey, err erro
 	log.Println("CA certificate created -", name)
 
 	// Save CA certificate and key
-	certOut, err := os.Create(path.Join(config.CertDir, name+" CA.crt"))
+	if _, err := os.Stat(dir); os.IsNotExist(err) {
+		err = os.Mkdir(dir, 0755)
+		if err != nil {
+			return nil, nil, err
+		}
+	}
+
+	certOut, err := os.Create(path.Join(dir, name+" CA.crt"))
 	if err != nil {
 		return nil, nil, err
 	}
@@ -88,7 +95,7 @@ func getCA(name string) (cert *x509.Certificate, key *ecdsa.PrivateKey, err erro
 	if err != nil {
 		return nil, nil, err
 	}
-	keyOut, err := os.Create(path.Join(config.CertDir, name+" CA.key"))
+	keyOut, err := os.Create(path.Join(dir, name+" CA.key"))
 	if err != nil {
 		return nil, nil, err
 	}
