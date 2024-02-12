@@ -1,0 +1,31 @@
+name: Build Release
+
+on:
+  release:
+    types: [created]
+
+permissions:
+    contents: write
+    packages: write
+
+jobs:
+
+  release-matrics:
+    name: Release binary
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        goos: [windows, linux, darwin]
+        goarch: [amd64, arm64]
+    steps:
+    - uses: actions/checkout@v4
+    - uses: wangyoucao577/go-release-action@v1
+      with:
+        github_token: ${{ secrets.GITHUB_TOKEN }}
+        goos: ${{ matrix.goos }}
+        goarch: ${{ matrix.goarch }}
+        binary_name: cp-vpncerts
+        build_flags: -a -trimpath
+        ldflags: -s -w -X main.appVersion=${{ github.event.release.tag_name }} 
+        asset_name: cp-vpncerts-${{ github.event.release.tag_name }}-${{ matrix.goos }}-${{ matrix.goarch }}
+        extra_files: README.md LICENSE config.yml
